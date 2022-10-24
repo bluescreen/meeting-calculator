@@ -81,14 +81,10 @@ async fn main() {
     let meeting_id: i64 = args.meeting_id;
     let access_token = env::var("ACCESS_TOKEN").unwrap_or("".to_string());
     let refresh_token = env::var("REFRESH_TOKEN").unwrap_or("".to_string());
-    println!("TOKEN {:?}", access_token);
 
     let zoom = Client::new_from_env(access_token, refresh_token);
-    let user_consent_url = zoom.user_consent_url(&["meeting:read".to_string()]);
-    println!("{:?}", user_consent_url);
-
-    //let mut zoom = Client::new_from_env(token.access_token, String::from(""));
-    //let mut access_token = zoom.get_access_token(code, state).await.unwrap();
+    //let user_consent_url = zoom.user_consent_url(&["meeting:read".to_string()]);
+    //println!("{:?}", user_consent_url);
 
     let meeting = fetch_meeting(&zoom, meeting_id).await.expect("cannot fetch meeting details");
     println!("{:?}", meeting);
@@ -101,7 +97,7 @@ async fn main() {
 
     loop {
         println!(
-            "Meeting {} ({})\n--------------------------------------------\n",
+            "Meeting: {} (ID: {})\n-------------------------------------------------\n",
             meeting.name,
             meeting.id
         );
