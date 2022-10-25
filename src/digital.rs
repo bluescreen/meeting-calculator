@@ -120,6 +120,21 @@ const CURRENCY: [[bool; 6]; 5] = [
     [true, true, true, true, true, true],
 ];
 
+const COMMA: [[bool; 6]; 5] = [
+    [false, false, false, false, false, false],
+    [false, false, false, false, false, false],
+    [true, false, false, false, false, false],
+    [true, false, false, false, false, false],
+    [true, false, false, false, false, false],
+];
+const DOT: [[bool; 6]; 5] = [
+    [false, false, false, false, false, false],
+    [false, false, false, false, false, false],
+    [false, false, false, false, false, false],
+    [false, false, false, false, false, false],
+    [true, false, false, false, false, false],
+];
+
 pub fn symbol(ch: char) -> [[bool; 6]; 5] {
     match ch {
         '1' => ONE,
@@ -135,6 +150,8 @@ pub fn symbol(ch: char) -> [[bool; 6]; 5] {
         ':' => DIV,
         '-' => DASH,
         ' ' => SPACE,
+        '.' => DOT,
+        ',' => COMMA,
         '€' => CURRENCY,
         _ => ERR,
     }
@@ -183,4 +200,8 @@ pub fn draw_text<W: Write>(text: String, sym: String, stdout: &mut RawTerminal<W
         .map(|x| { symbol(x) })
         .collect();
     draw(digits, sym.clone(), 1, 1, 1, 1, stdout);
+}
+
+pub fn clear<W: Write>(stdout: &mut RawTerminal<W>) {
+    write!(stdout, "\n{}{}\n", cursor::Hide, clear::All).unwrap();
 }

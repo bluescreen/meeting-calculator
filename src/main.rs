@@ -1,12 +1,11 @@
 use std::{ thread, time, env };
-use digital::symbol;
 use zoom_api::{ Client, AccessToken };
 use meeting::{ Attendee, Meeting };
 use clap::Parser;
 use dotenv::dotenv;
 use ws::{ listen };
-use std::io::{ stdout };
-use termion::{ raw::IntoRawMode };
+use std::io::{ stdout, stdin, Read, Write };
+use termion::{ async_stdin, raw::IntoRawMode, color, raw::RawTerminal };
 
 mod attendees;
 mod meeting;
@@ -61,8 +60,12 @@ fn print_costs(second: i32, attendees: &Vec<Attendee>, total: f32) {
     );
 }
 
+fn print_meeting_header<W: Write>(stdout: &mut RawTerminal<W>, meeting: &Meeting) {
+    write!(stdout, "Meeting: {} (ID: {})", meeting.name, meeting.id).unwrap();
+}
+
 fn clear_screen() {
-    print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
+    //print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
 }
 
 async fn _fetch_access_token(
@@ -100,6 +103,7 @@ async fn main() {
     let args = Opts::parse();
 
     let mut stdout = stdout().into_raw_mode().unwrap();
+    let mut stdin = async_stdin().bytes();
 
     let meeting_id: i64 = args.meeting_id;
     let access_token = env::var("ACCESS_TOKEN").unwrap_or("".to_string());
@@ -115,34 +119,57 @@ async fn main() {
         name: String::from("test"),
         attendees: attendees::get_attendees(),
     };
-    println!("{:?}", meeting);
 
-    let delay = time::Duration::from_secs(1);
+    let delay = time::Duration::from_millis(100);
 
     let mut total: f32 = 0.0;
     let mut second: i32 = 0;
+    let mut exit = 0;
     let symbol = String::from("█"); // Symbol
 
-    clear_screen();
+    // digital::clear(&mut stdout);#
 
     loop {
-        println!(
-            "Meeting: {} (ID: {})\n-------------------------------------------------\n",
-            meeting.name,
-            meeting.id
-        );
+        print!("{}{}", termion::clear::All, termion::cursor::Goto(1, 1));
 
-        print_attendees(&meeting.attendees);
-        println!();
+        let ev = stdin.next();
+        if let Some(Ok(b)) = ev {
+            match b {
+                b'q' => {
+                    exit = 1;
+                }
+                _ => {}
+            }
+        }
 
+        print_meeting_header(&mut stdout, &meeting);
         total += calculate_total(&meeting.attendees);
-        print_costs(second, &meeting.attendees, total);
 
-        digital::draw_text(String::from(format!("{} €", 123)), symbol.clone(), &mut stdout);
+        /* 
+        print_attendees(&meeting.attendees);
+        print_costs(second, &meeting.attendees, total);
+        */
+
+        print!("{}", termion::cursor::Goto(1, 5));
+
+        digital::draw_text(
+            String::from(format!("{}", format!("{:.2}", &total))),
+            symbol.clone(),
+            &mut stdout
+        );
+        write!(stdout, "{}", format!("{:.2}", &total)).unwrap();
 
         thread::sleep(delay);
-        clear_screen();
+        println!("{}", color::Fg(color::Reset));
+        println!("{}", color::Bg(color::Reset));
+
+        stdout.flush().unwrap();
 
         second += 1;
+        if exit == 1 {
+            // Quit
+            break;
+        }
     }
+    write!(stdout, "{}", termion::cursor::Show).unwrap();
 }
