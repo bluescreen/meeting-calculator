@@ -1,11 +1,16 @@
 use std::{ thread, time, env };
+use digital::symbol;
 use zoom_api::{ Client, AccessToken };
 use meeting::{ Attendee, Meeting };
 use clap::Parser;
 use dotenv::dotenv;
+use ws::{ listen };
+use std::io::{ stdout };
+use termion::{ raw::IntoRawMode };
 
 mod attendees;
 mod meeting;
+mod digital;
 
 #[derive(Parser, Debug)]
 pub struct Opts {
@@ -73,10 +78,28 @@ async fn _fetch_access_token(
     Ok(_access_token)
 }
 
+fn connect_socket() {
+    println!("Server is listening port 3012");
+
+    if
+        let Err(error) = listen("127.0.0.1:3012", |out| {
+            move |msg| {
+                println!("Server got message '{}'. ", msg);
+                out.send(msg)
+            }
+        })
+    {
+        // Inform the user of failure
+        println!("Failed to create WebSocket due to {:?}", error);
+    }
+}
+
 #[tokio::main]
 async fn main() {
     dotenv().ok();
     let args = Opts::parse();
+
+    let mut stdout = stdout().into_raw_mode().unwrap();
 
     let meeting_id: i64 = args.meeting_id;
     let access_token = env::var("ACCESS_TOKEN").unwrap_or("".to_string());
@@ -86,13 +109,20 @@ async fn main() {
     //let user_consent_url = zoom.user_consent_url(&["meeting:read".to_string()]);
     //println!("{:?}", user_consent_url);
 
-    let meeting = fetch_meeting(&zoom, meeting_id).await.expect("cannot fetch meeting details");
+    //let meeting = fetch_meeting(&zoom, meeting_id).await.expect("cannot fetch meeting details");
+    let meeting = Meeting {
+        id: 1,
+        name: String::from("test"),
+        attendees: attendees::get_attendees(),
+    };
     println!("{:?}", meeting);
 
     let delay = time::Duration::from_secs(1);
 
     let mut total: f32 = 0.0;
     let mut second: i32 = 0;
+    let symbol = String::from("█"); // Symbol
+
     clear_screen();
 
     loop {
@@ -107,6 +137,9 @@ async fn main() {
 
         total += calculate_total(&meeting.attendees);
         print_costs(second, &meeting.attendees, total);
+
+        digital::draw_text(String::from(format!("{} €", 123)), symbol.clone(), &mut stdout);
+
         thread::sleep(delay);
         clear_screen();
 

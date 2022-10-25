@@ -10,3 +10,5 @@ dotenv = "0.15.0"
 zoom-api = "0.2.8"
 tokio = { version = "*", features = ["rt-multi-thread", "macros"] }
 clap = { version = "4.0.11", features = ["derive"] }
+ws = "0.9.2"
+termion = "2.0.1"
