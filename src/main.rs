@@ -3,9 +3,11 @@ use zoom_api::{ Client, AccessToken };
 use meeting::{ Attendee, Meeting };
 use clap::Parser;
 use dotenv::dotenv;
+use chrono::offset::Local;
 use ws::{ listen };
-use std::io::{ stdout, stdin, Read, Write };
-use termion::{ async_stdin, raw::IntoRawMode, color, raw::RawTerminal };
+use std::io::{ stdout, Read, Write };
+use termion::{ async_stdin, raw::IntoRawMode, raw::RawTerminal, cursor, clear };
+use digital::{ clear_screen, draw_text };
 
 mod attendees;
 mod meeting;
@@ -27,14 +29,24 @@ async fn fetch_meeting(zoom: &Client, meeting_id: i64) -> Result<Meeting, ()> {
     })
 }
 
-fn print_attendees(attendees: &Vec<Attendee>) -> () {
+fn draw_attendees<W: Write>(
+    stdout: &mut RawTerminal<W>,
+    attendees: &Vec<Attendee>,
+    pos_x: u16,
+    pos_y: u16
+) -> () {
+    let mut pos = 0;
     for attendee in attendees {
-        println!(
+        write!(stdout, "{}", cursor::Goto(pos_x, pos_y + pos)).unwrap();
+
+        writeln!(
+            stdout,
             "Attendee: {0: <10}\t Salary per day: {1: <10} \t Role: {2}",
             attendee.name,
             attendee.salary,
             attendee.role.to_string()
-        );
+        ).unwrap();
+        pos += 1;
     }
 }
 
@@ -49,23 +61,39 @@ fn calculate_total(attendees: &Vec<Attendee>) -> f32 {
     total
 }
 
-fn print_costs(second: i32, attendees: &Vec<Attendee>, total: f32) {
-    println!(
-        "Time {:02}:{:02}:{:02} Attendees: {} Costs {:.2} €",
+fn draw_status<W: Write>(
+    stdout: &mut RawTerminal<W>,
+    second: i32,
+    attendees: &Vec<Attendee>,
+    total: f32,
+    pos_x: u16,
+    pos_y: u16
+) {
+    write!(
+        stdout,
+        "{}Time {:02}:{:02}:{:02} Attendees: {} Costs {:.2} €",
+        cursor::Goto(pos_x, pos_y),
         second / 3600,
         (second / 60) % 60,
         second % 60,
         attendees.len(),
         total
-    );
+    ).unwrap();
 }
 
-fn print_meeting_header<W: Write>(stdout: &mut RawTerminal<W>, meeting: &Meeting) {
-    write!(stdout, "Meeting: {} (ID: {})", meeting.name, meeting.id).unwrap();
-}
-
-fn clear_screen() {
-    //print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
+fn draw_meeting_header<W: Write>(
+    stdout: &mut RawTerminal<W>,
+    meeting: &Meeting,
+    pos_x: u16,
+    pos_y: u16
+) {
+    write!(
+        stdout,
+        "{}Meeting: {} (ID: {})",
+        cursor::Goto(pos_x, pos_y),
+        meeting.name,
+        meeting.id
+    ).unwrap();
 }
 
 async fn _fetch_access_token(
@@ -97,13 +125,74 @@ fn connect_socket() {
     }
 }
 
+fn resize_watcher<W: Write>(size: (u16, u16), stdout: &mut RawTerminal<W>) -> bool {
+    if size != termion::terminal_size().unwrap() {
+        write!(stdout, "{}", clear::All).unwrap();
+        true
+    } else {
+        false
+    }
+}
+
+fn render_loop(meeting: &Meeting) {
+    let mut stdout = stdout().into_raw_mode().unwrap();
+    let mut stdin = async_stdin().bytes();
+    let mut size = termion::terminal_size().unwrap();
+
+    let delay = time::Duration::from_millis(100);
+
+    let mut total: f32 = 0.0;
+    let mut second: i32 = 0;
+    let mut exit = 0;
+    let symbol: char = '█'; // Symbol
+    let clock = "%H:%M:%S";
+
+    write!(stdout, "{}{}", cursor::Hide, clear::All).unwrap();
+
+    while exit != 1 {
+        let time = Local::now().format(clock).to_string();
+        total += calculate_total(&meeting.attendees);
+
+        draw_meeting_header(&mut stdout, &meeting, 1, 1);
+        draw_status(&mut stdout, second, &meeting.attendees, total, size.0 - 40, 1);
+        draw_attendees(&mut stdout, &meeting.attendees, 1, 3);
+
+        draw_text(
+            &mut stdout,
+            String::from(format!("{}", format!("{:.2}", &total))),
+            &symbol,
+            1,
+            (meeting.attendees.len() + 5) as u16
+        );
+
+        stdout.flush().unwrap();
+
+        while time == Local::now().format(clock).to_string() {
+            let ev = stdin.next();
+            if let Some(Ok(b)) = ev {
+                match b {
+                    b'q' => {
+                        exit = 1;
+                    }
+                    _ => {}
+                }
+            }
+            if resize_watcher(size, &mut stdout) {
+                size = termion::terminal_size().unwrap();
+                break;
+            }
+            thread::sleep(delay);
+        }
+        second += 1;
+        clear_screen();
+    }
+    write!(stdout, "{}", termion::cursor::Show).unwrap();
+}
+
 #[tokio::main]
 async fn main() {
     dotenv().ok();
     let args = Opts::parse();
-
-    let mut stdout = stdout().into_raw_mode().unwrap();
-    let mut stdin = async_stdin().bytes();
 
     let meeting_id: i64 = args.meeting_id;
     let access_token = env::var("ACCESS_TOKEN").unwrap_or("".to_string());
@@ -115,61 +204,9 @@ async fn main() {
 
     //let meeting = fetch_meeting(&zoom, meeting_id).await.expect("cannot fetch meeting details");
     let meeting = Meeting {
-        id: 1,
+        id: meeting_id,
         name: String::from("test"),
         attendees: attendees::get_attendees(),
     };
-
-    let delay = time::Duration::from_millis(100);
-
-    let mut total: f32 = 0.0;
-    let mut second: i32 = 0;
-    let mut exit = 0;
-    let symbol = String::from("█"); // Symbol
-
-    // digital::clear(&mut stdout);#
-
-    loop {
-        print!("{}{}", termion::clear::All, termion::cursor::Goto(1, 1));
-
-        let ev = stdin.next();
-        if let Some(Ok(b)) = ev {
-            match b {
-                b'q' => {
-                    exit = 1;
-                }
-                _ => {}
-            }
-        }
-
-        print_meeting_header(&mut stdout, &meeting);
-        total += calculate_total(&meeting.attendees);
-
-        /* 
-        print_attendees(&meeting.attendees);
-        print_costs(second, &meeting.attendees, total);
-        */
-
-        print!("{}", termion::cursor::Goto(1, 5));
-
-        digital::draw_text(
-            String::from(format!("{}", format!("{:.2}", &total))),
-            symbol.clone(),
-            &mut stdout
-        );
-        write!(stdout, "{}", format!("{:.2}", &total)).unwrap();
-
-        thread::sleep(delay);
-        println!("{}", color::Fg(color::Reset));
-        println!("{}", color::Bg(color::Reset));
-
-        stdout.flush().unwrap();
-
-        second += 1;
-        if exit == 1 {
-            // Quit
-            break;
-        }
-    }
-    write!(stdout, "{}", termion::cursor::Show).unwrap();
+    render_loop(&meeting);
 }

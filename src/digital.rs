@@ -158,13 +158,13 @@ pub fn symbol(ch: char) -> [[bool; 6]; 5] {
 }
 
 pub fn draw<W: Write>(
+    stdout: &mut RawTerminal<W>,
     hour: Vec<[[bool; 6]; 5]>,
-    sym: String,
+    sym: &char,
     mut pos_x: u16,
     pos_y: u16,
     fg_color: u8,
-    bg_color: u8,
-    stdout: &mut RawTerminal<W>
+    bg_color: u8
 ) {
     for digit in hour {
         for j in 0..digit.len() {
@@ -194,14 +194,26 @@ pub fn draw<W: Write>(
     }
 }
 
-pub fn draw_text<W: Write>(text: String, sym: String, stdout: &mut RawTerminal<W>) -> () {
+pub fn draw_text<W: Write>(
+    stdout: &mut RawTerminal<W>,
+    text: String,
+    sym: &char,
+    pos_x: u16,
+    pos_y: u16
+) -> () {
     let digits = text
         .chars()
         .map(|x| { symbol(x) })
         .collect();
-    draw(digits, sym.clone(), 1, 1, 1, 1, stdout);
+    draw(stdout, digits, sym, pos_x, pos_y, 1, 1);
 }
 
-pub fn clear<W: Write>(stdout: &mut RawTerminal<W>) {
-    write!(stdout, "\n{}{}\n", cursor::Hide, clear::All).unwrap();
+pub fn clear_screen() {
+    print!(
+        "{}{}{}{}",
+        termion::cursor::Goto(1, 1),
+        color::Fg(color::Reset),
+        color::Bg(color::Reset),
+        termion::clear::All
+    );
 }
