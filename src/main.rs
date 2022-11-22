@@ -1,4 +1,5 @@
 use std::{ thread, time, env };
+use savefile::{ save_file, load_file, SavefileError };
 use zoom_api::{ Client, AccessToken };
 use meeting::{ Attendee, Meeting };
 use clap::{ Parser };
@@ -9,6 +10,10 @@ use ws::{ listen, connect, CloseCode, Sender };
 use std::io::{ stdout, Read, Write };
 use termion::{ async_stdin, raw::IntoRawMode, raw::RawTerminal, cursor::{ self, Goto }, clear };
 use digital::{ clear_screen, draw_text };
+extern crate savefile;
+
+#[macro_use]
+extern crate savefile_derive;
 
 use crate::meeting::Roles;
 
@@ -122,22 +127,6 @@ async fn _fetch_access_token(
     Ok(_access_token)
 }
 
-fn connect_socket() {
-    println!("Server is listening port 3012");
-
-    if
-        let Err(error) = listen("127.0.0.1:3012", |out| {
-            move |msg| {
-                println!("Server got message '{}'. ", msg);
-                out.send(msg)
-            }
-        })
-    {
-        // Inform the user of failure
-        println!("Failed to create WebSocket due to {:?}", error);
-    }
-}
-
 fn resize_watcher<W: Write>(size: (u16, u16), stdout: &mut RawTerminal<W>) -> bool {
     if size != termion::terminal_size().unwrap() {
         write!(stdout, "{}", clear::All).unwrap();
@@ -197,6 +186,7 @@ fn handle_input(
             b'q' => {
                 *exit = 1;
             }
+            b's' => { save_meeting(&meeting) }
             b'a' => {
                 clear_screen();
                 write!(stdout, "{}Add Attendant", Goto(center_x, 2)).unwrap();
@@ -210,7 +200,18 @@ fn handle_input(
     }
 }
 
-fn render_loop(meeting: &mut Meeting, sender: &Sender) {
+fn save_meeting(meeting: &Meeting) {
+    let filepath = format!("data/meeting_{}.dat", meeting.id);
+    save_file(&filepath, 0, meeting).expect("Cannot save meeting data");
+    println!("Meeting data saved to {}", &filepath)
+}
+
+fn load_meeting(meeting_id: i32) -> Result<Meeting, SavefileError> {
+    let filepath = format!("data/meeting_{}.dat", meeting_id);
+    load_file(filepath, 0)
+}
+
+fn render_loop(meeting: &mut Meeting) {
     let mut stdout = stdout().into_raw_mode().unwrap();
     let mut stdin = async_stdin().bytes();
     let mut size = termion::terminal_size().unwrap();
@@ -237,7 +238,7 @@ fn render_loop(meeting: &mut Meeting, sender: &Sender) {
             let char_width: u16 = 6;
             let text_len: u16 = text.len() as u16;
 
-            sender.send(text.clone()).unwrap();
+            //sender.send(text.clone()).unwrap();
 
             draw_text(
                 &mut stdout,
@@ -259,6 +260,7 @@ fn render_loop(meeting: &mut Meeting, sender: &Sender) {
             thread::sleep(delay);
         }
         second += 1;
+        meeting.duration_seconds = second as i64;
     }
     write!(stdout, "{}", termion::cursor::Show).unwrap();
 }
@@ -277,17 +279,24 @@ async fn main() {
         let zoom = Client::new_from_env(access_token, refresh_token);
         meeting = fetch_meeting(&zoom, meeting_id).await.expect("cannot fetch meeting details");
     } else {
-        meeting = Meeting::new("Planning".to_string(), Some(args.ellapsed));
+        let meeting_result = load_meeting(meeting_id as i32);
+        meeting = match meeting_result {
+            Ok(meeting) => meeting,
+            Err(_error) => Meeting::new(meeting_id, "MEETING".to_string(), Some(args.ellapsed)),
+        };
     }
 
+    println!("{:#?}", &meeting);
+    render_loop(&mut meeting);
+    save_meeting(&meeting);
+
+    /* 
     connect("ws://127.0.0.1:3012", |out| {
         render_loop(&mut meeting, &out);
-
-        out.send("Hello WebSocket").unwrap();
-
+        save_meeting(&meeting);
         move |msg| {
             println!("Got message: {}", msg);
             out.close(CloseCode::Normal)
         }
-    }).unwrap();
+    }).unwrap();*/
 }

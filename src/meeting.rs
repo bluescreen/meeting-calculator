@@ -1,7 +1,7 @@
 use std::fmt;
 use std::slice::Iter;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Savefile)]
 pub enum Roles {
     BackendDeveloperSpecial,
     BackendDeveloperSenior,
@@ -48,8 +48,7 @@ impl fmt::Display for Roles {
         }
     }
 }
-
-#[derive(Debug)]
+#[derive(Debug, Savefile)]
 pub struct Meeting {
     pub id: i64,
     pub name: String,
@@ -58,9 +57,9 @@ pub struct Meeting {
 }
 
 impl Meeting {
-    pub fn new(name: String, ellapsed: Option<i64>) -> Self {
+    pub fn new(meeting_id: i64, name: String, ellapsed: Option<i64>) -> Self {
         Self {
-            id: 1,
+            id: meeting_id,
             duration_seconds: ellapsed.unwrap_or(0),
             name: name,
             attendees: vec![],
@@ -74,7 +73,7 @@ impl Meeting {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Savefile)]
 pub struct Attendee {
     pub name: String,
     pub salary: i32,
