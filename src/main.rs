@@ -1,11 +1,11 @@
 use std::{ thread, time, env };
 use zoom_api::{ Client, AccessToken };
 use meeting::{ Attendee, Meeting };
-use clap::{ Parser, Arg };
+use clap::{ Parser };
 use dotenv::dotenv;
 use chrono::offset::Local;
 use chrono::Utc;
-use ws::{ listen };
+use ws::{ listen, connect, CloseCode, Sender };
 use std::io::{ stdout, Read, Write };
 use termion::{ async_stdin, raw::IntoRawMode, raw::RawTerminal, cursor::{ self, Goto }, clear };
 use digital::{ clear_screen, draw_text };
@@ -210,7 +210,7 @@ fn handle_input(
     }
 }
 
-fn render_loop(meeting: &mut Meeting) {
+fn render_loop(meeting: &mut Meeting, sender: &Sender) {
     let mut stdout = stdout().into_raw_mode().unwrap();
     let mut stdin = async_stdin().bytes();
     let mut size = termion::terminal_size().unwrap();
@@ -236,6 +236,8 @@ fn render_loop(meeting: &mut Meeting) {
             let text = format!("{:.2}", &total);
             let char_width: u16 = 6;
             let text_len: u16 = text.len() as u16;
+
+            sender.send(text.clone()).unwrap();
 
             draw_text(
                 &mut stdout,
@@ -277,5 +279,15 @@ async fn main() {
     } else {
         meeting = Meeting::new("Planning".to_string(), Some(args.ellapsed));
     }
-    render_loop(&mut meeting);
+
+    connect("ws://127.0.0.1:3012", |out| {
+        render_loop(&mut meeting, &out);
+
+        out.send("Hello WebSocket").unwrap();
+
+        move |msg| {
+            println!("Got message: {}", msg);
+            out.close(CloseCode::Normal)
+        }
+    }).unwrap();
 }
