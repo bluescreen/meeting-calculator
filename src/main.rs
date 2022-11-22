@@ -152,6 +152,19 @@ fn draw_attendees_add_menu<W: Write>(stdout: &mut RawTerminal<W>, x_pos: u16) {
     stdout.flush().unwrap();
 }
 
+fn draw_attendees_remove_menu<W: Write>(
+    stdout: &mut RawTerminal<W>,
+    meeting: &mut Meeting,
+    x_pos: u16
+) {
+    let mut pos = 0;
+    for attendee in &meeting.attendees {
+        write!(stdout, "{}({}) {}", Goto(x_pos, 3 + pos), pos + 1, attendee.name).unwrap();
+        pos += 1;
+    }
+    stdout.flush().unwrap();
+}
+
 fn add_attendant_by_role(stdin: &mut std::io::Bytes<termion::AsyncReader>, meeting: &mut Meeting) {
     loop {
         let all_roles: Vec<&Roles> = Roles::Iterator().collect();
@@ -167,6 +180,17 @@ fn add_attendant_by_role(stdin: &mut std::io::Bytes<termion::AsyncReader>, meeti
                     break;
                 }
             }
+        }
+    }
+}
+
+fn remove_attendant(stdin: &mut std::io::Bytes<termion::AsyncReader>, meeting: &mut Meeting) {
+    loop {
+        let option = stdin.next();
+        if let Some(Ok(input)) = option {
+            let input_num: usize = (input as usize) - 48;
+            meeting.remove_attendee(input_num);
+            break;
         }
     }
 }
@@ -194,6 +218,12 @@ fn handle_input(
                 add_attendant_by_role(stdin, meeting);
                 clear_screen();
                 *pause = 0;
+            }
+            b'r' => {
+                clear_screen();
+                draw_attendees_remove_menu(stdout, meeting, center_x);
+                remove_attendant(stdin, meeting);
+                clear_screen();
             }
             _ => {}
         }

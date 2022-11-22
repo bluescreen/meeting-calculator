@@ -71,6 +71,10 @@ impl Meeting {
         let new_attendee = Attendee::new(format!("Attendant {}", next_id), role);
         self.attendees.push(new_attendee);
     }
+
+    pub fn remove_attendee(&mut self, index: usize) {
+        self.attendees.remove(index);
+    }
 }
 
 #[derive(Debug, Savefile)]
