@@ -1,7 +1,7 @@
 use std::{ thread, time, env };
 use zoom_api::{ Client, AccessToken };
 use meeting::{ Attendee, Meeting };
-use clap::Parser;
+use clap::{ Parser, Arg };
 use dotenv::dotenv;
 use chrono::offset::Local;
 use chrono::Utc;
@@ -12,7 +12,6 @@ use digital::{ clear_screen, draw_text };
 
 use crate::meeting::Roles;
 
-mod attendees;
 mod meeting;
 mod digital;
 
@@ -37,7 +36,7 @@ async fn fetch_meeting(zoom: &Client, meeting_id: i64) -> Result<Meeting, ()> {
         id: meeting_id,
         duration_seconds: duration.num_seconds(),
         name: details.meeting_info_get.topic,
-        attendees: attendees::get_attendees(),
+        attendees: vec![],
     })
 }
 
@@ -271,16 +270,12 @@ async fn main() {
     let access_token = env::var("ACCESS_TOKEN").unwrap_or("".to_string());
     let refresh_token = env::var("REFRESH_TOKEN").unwrap_or("".to_string());
 
-    let zoom = Client::new_from_env(access_token, refresh_token);
-    //let user_consent_url = zoom.user_consent_url(&["meeting:read".to_string()]);
-    //println!("{:?}", user_consent_url);
-
-    // let meeting = fetch_meeting(&zoom, meeting_id).await.expect("cannot fetch meeting details");
-    let mut meeting: Meeting = Meeting {
-        id: meeting_id,
-        duration_seconds: args.ellapsed,
-        name: "Planning".to_string(),
-        attendees: vec![],
-    };
+    let mut meeting: Meeting;
+    if meeting_id > 10000000 {
+        let zoom = Client::new_from_env(access_token, refresh_token);
+        meeting = fetch_meeting(&zoom, meeting_id).await.expect("cannot fetch meeting details");
+    } else {
+        meeting = Meeting::new("Planning".to_string(), Some(args.ellapsed));
+    }
     render_loop(&mut meeting);
 }

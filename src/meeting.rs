@@ -58,6 +58,15 @@ pub struct Meeting {
 }
 
 impl Meeting {
+    pub fn new(name: String, ellapsed: Option<i64>) -> Self {
+        Self {
+            id: 1,
+            duration_seconds: ellapsed.unwrap_or(0),
+            name: name,
+            attendees: vec![],
+        }
+    }
+
     pub fn add_attendee(&mut self, role: Roles) {
         let next_id = self.attendees.len() + 1;
         let new_attendee = Attendee::new(format!("Attendant {}", next_id), role);
