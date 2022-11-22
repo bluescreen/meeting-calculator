@@ -4,6 +4,11 @@ Rust learning project to calculate meeting costs. Fetches current meeting inform
 
 Heavily inspired by rsClock https://github.com/valebes/rsClock
 
+### TODO
+
+- Teams integration
+- Salary mapping to Roles
+
 ### Configuration
 
 Fill in your Zoom api credentials in the .env file

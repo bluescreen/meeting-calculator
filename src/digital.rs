@@ -205,7 +205,7 @@ pub fn draw_text<W: Write>(
         .chars()
         .map(|x| { symbol(x) })
         .collect();
-    draw(stdout, digits, sym, pos_x, pos_y, 1, 1);
+    draw(stdout, digits, sym, pos_x, pos_y, 2, 1);
 }
 
 pub fn clear_screen() {
